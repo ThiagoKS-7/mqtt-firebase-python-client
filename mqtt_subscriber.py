@@ -7,7 +7,7 @@ from firebase_admin import db
 import paho.mqtt.client as mqtt
 
 dotenv.load_dotenv()
-cred = credentials.Certificate("./cred.json")
+cred = credentials.Certificate(os.getenv('CRED_PATH'))
 
 # Initialize the app with a service account, granting admin privileges
 firebase_admin.initialize_app(cred,{
