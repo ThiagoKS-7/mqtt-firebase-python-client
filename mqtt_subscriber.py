@@ -24,7 +24,6 @@ firebase_admin.initialize_app(cred,{
 ref = db.reference('nodemcu')
 prevTemp = ref.get()["dht11"]["temperature"]["payload"]
 prevHum = ref.get()["dht11"]["humidity"]["payload"]
-
 TEMP_TOPIC="nodemcu/dht11/temperature"
 HUM_TOPIC="nodemcu/dht11/humidity"
 
@@ -34,6 +33,9 @@ humidity_ref = ref.child("dht11/humidity")
 
 
 def on_message(client, userdata, message):        
+    global prevHum
+    global prevTemp 
+    
     if "humidity" in message.topic:
         print(f'{message.topic}: Payload:{str(message.payload.decode("utf-8"))}% - QoS:{message.qos} - Retain:{message.retain}')
         if prevHum !=  f'{str(message.payload.decode("utf-8"))}%':
@@ -52,10 +54,13 @@ def on_message(client, userdata, message):
             prevTemp = ref.get()["dht11"]["temperature"]["payload"]
 
 # broker_address="192.168.1.184" 
+print("[INFO] Starting Server...")
 broker_address="mqtt.eclipseprojects.io" #use external broker
 client = mqtt.Client("P1") #create new instance
 client.on_message=on_message #attach function to callback
 client.connect(broker_address) #connect to broker
+client.loop_start()
+print("[INFO] Broker connected")
 client.subscribe(TEMP_TOPIC, qos=1)
 client.subscribe(HUM_TOPIC, qos=1)
 while True:
