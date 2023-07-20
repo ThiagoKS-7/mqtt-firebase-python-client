@@ -1,6 +1,5 @@
 import os
 import dotenv
-import time
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
@@ -20,48 +19,40 @@ firebase_admin.initialize_app(cred,{
  'appId':  os.getenv('APP_ID')
 })
 
-# As an admin, the app has access to read and write all data, regradless of Security Rules
 ref = db.reference('nodemcu')
-prevTemp = ref.get()["dht11"]["temperature"]["payload"]
-prevHum = ref.get()["dht11"]["humidity"]["payload"]
-TEMP_TOPIC="nodemcu/dht11/temperature"
-HUM_TOPIC="nodemcu/dht11/humidity"
-
-
 temperature_ref = ref.child("dht11/temperature")
 humidity_ref = ref.child("dht11/humidity")
 
+# The callback for when the client receives a CONNACK response from the server.
+def on_connect(client, userdata, flags, rc):
+    print("Connected with result code "+str(rc))
+    # Subscribing in on_connect() means that if we lose the connection and
+    # reconnect then subscriptions will be renewed.
+    client.subscribe([("nodemcu/dht11/temperature", 1), ("nodemcu/dht11/humidity", 1)])
 
-def on_message(client, userdata, message):        
-    global prevHum
-    global prevTemp 
+# The callback for when a PUBLISH message is received from the server.
+def on_message(client, userdata, msg):
+    print(msg.topic+": "+str(msg.payload.decode("utf-8"))+"- QoS: "+str(msg.qos))
     
-    if "humidity" in message.topic:
-        print(f'{message.topic}: Payload:{str(message.payload.decode("utf-8"))}% - QoS:{message.qos} - Retain:{message.retain}')
-        if prevHum !=  f'{str(message.payload.decode("utf-8"))}%':
-            humidity_ref.update({
-                'payload': f'{str(message.payload.decode("utf-8"))}%',
-                'qos': message.qos,
-            })
-            prevHum = ref.get()["dht11"]["humidity"]["payload"]
+    if "humidity" in msg.topic:
+        humidity_ref.update({
+            'payload': int(msg.payload.decode("utf-8")),
+            'qos': msg.qos,
+        })
     else:
-        print(f'{message.topic}: Payload:{str(message.payload.decode("utf-8"))}C - QoS:{message.qos} - Retain:{message.retain}')
-        if prevTemp != f'{str(message.payload.decode("utf-8"))}C':
-            temperature_ref.update({
-                'payload': f'{str(message.payload.decode("utf-8"))}C',
-                'qos': message.qos,
-            })
-            prevTemp = ref.get()["dht11"]["temperature"]["payload"]
+        temperature_ref.update({
+            'payload': int(msg.payload.decode("utf-8")),
+            'qos': msg.qos,
+        })
 
-# broker_address="192.168.1.184" 
-print("[INFO] Starting Server...")
-broker_address="mqtt.eclipseprojects.io" #use external broker
-client = mqtt.Client("P1") #create new instance
-client.on_message=on_message #attach function to callback
-client.connect(broker_address) #connect to broker
-client.loop_start()
-print("[INFO] Broker connected")
-client.subscribe(TEMP_TOPIC, qos=1)
-client.subscribe(HUM_TOPIC, qos=1)
-while True:
-    time.sleep(10)
+client = mqtt.Client()
+client.on_connect = on_connect
+client.on_message = on_message
+
+client.connect("mqtt.eclipseprojects.io", 1883, 60)
+
+# Blocking call that processes network traffic, dispatches callbacks and
+# handles reconnecting.
+# Other loop*() functions are available that give a threaded interface and a
+# manual interface.
+client.loop_forever()
